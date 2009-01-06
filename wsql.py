@@ -10,9 +10,12 @@ pwd = os.path.dirname(os.path.realpath(sys.argv[0]))
 per = os.path.dirname(pwd)
 sys.path.append(per)
 from sqlstore import *
+from tools import q_query
 
-MAX_LIMIT = 10
+MAX_LIMIT = 100
 mode = 'sql'
+mode_list = ('sql','py','kdb')
+kdb_host = 'boromir'
 tmpfile = '/tmp/wsql.tmp'
 
 regx = re.compile(u"([\u2e80-\uffff])", re.UNICODE)
@@ -62,13 +65,19 @@ def process_sql(store, cmd):
         print outstr
     print hr
 
+def process_kdb(cmd):
+    cmd = '%s#%s'%(MAX_LIMIT, cmd)
+    data = q_query(cmd, host=kdb_host)
+    for row in data:
+        print ' '.join(row)
+
 def get_store(conf):
     return SqlStore(host=conf['host'],user=conf['user'],passwd=conf['passwd'],\
             db=conf['db'],port=conf['port'],cursorclass=MySQLdb.cursors.DictCursor)
 
 def cmd_loop():
     print '''Welcome to wsql, \npress "q" to exit, \npress "use **" to switch database, \npress sql command to query mysql.\n'''
-    global MAX_LIMIT, mode
+    global MAX_LIMIT, mode, kdb_host
     store = get_store(luz2)
     while 1:
         prompt = '%s>'%mode
@@ -87,17 +96,24 @@ def cmd_loop():
                 dbconf = eval(db+'conf')
             print 'DB config:', dbconf
             store = get_store(dbconf)
-        elif cmd == 'mode':
-            if mode == 'sql': mode = 'py'
-            else: mode='sql'
-        elif cmd[:4].lower() == 'limit ':
+        elif cmd[:6].lower() == 'limit ':
             MAX_LIMIT = cmd.split()[-1]
+        elif cmd[:5].lower() == 'host ':
+            kdb_host = cmd.split()[-1]
+        elif cmd[:5].lower() == 'mode ':
+            arg = cmd.split()[-1]
+            if arg in mode_list:
+                mode = arg
+            else:
+                print 'mode must in', mode_list
         else:
             try:
                 if mode == 'py':
                     exec cmd
                 elif mode == 'sql':
                     process_sql(store, cmd)
+                elif mode == 'kdb':
+                    process_kdb(cmd)
             except:
                 e = strException()
                 print e
