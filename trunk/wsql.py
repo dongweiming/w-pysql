@@ -6,6 +6,7 @@ import re
 import MySQLdb
 import MySQLdb.cursors
 import traceback, cStringIO
+import time
 pwd = os.path.dirname(os.path.realpath(sys.argv[0]))
 per = os.path.dirname(pwd)
 sys.path.append(per)
@@ -54,7 +55,9 @@ class SQLProcessor(Processor):
 
     def process(self, store, cmd):
         print cmd
+        ot = time.time()
         store.farm.execute(cmd)
+        self.tc = time.time() - ot
         desc = store.farm.description
         keys = [item[0] for item in desc]
         content = store.farm.fetchall()
@@ -97,7 +100,9 @@ class KDBProcessor(Processor):
 
     def process(self, cmd):
         cmd = '%s#%s'%(self.opt.limit, cmd)
+        ot = time.time()
         data = q_query(cmd, host=self.opt.khost)
+        self.tc = time.time() - ot
         for row in data:
             print ' '.join(row)
 
@@ -152,8 +157,10 @@ def cmd_loop():
                     exec cmd
                 elif opt.mode == 'sql':
                     sqlp.process(store, cmd)
+                    print 'time cost: %10.4f'%sqlp.tc
                 elif opt.mode == 'kdb':
                     kdbp.process(cmd)
+                    print 'time cost: %10.4f'%kdbp.tc
             except:
                 e = strException()
                 print e
