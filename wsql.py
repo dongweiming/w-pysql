@@ -12,12 +12,6 @@ sys.path.append(per)
 from sqlstore import *
 from tools import q_query
 
-MAX_LIMIT = 100
-mode = 'sql'
-mode_list = ('sql','py','kdb')
-kdb_host = 'boromir'
-tmpfile = '/tmp/wsql.tmp'
-
 regx = re.compile(u"([\u2e80-\uffff])", re.UNICODE)
 
 def strException():
@@ -27,60 +21,110 @@ def strException():
     sio.close()
     return s
 
-def process_sql(store, cmd):
-    print cmd
-    store.farm.execute(cmd)
-    desc = store.farm.description
-    keys = [item[0] for item in desc]
-    content = store.farm.fetchall()
-    if not content:
-        print 'null result'
-        return
-    if len(content) > MAX_LIMIT: content = content[:MAX_LIMIT]
-    for row in content:
-        for k, v in row.items():
-            #v = regx.sub(r'\1\0', str(v).decode('utf-8'))
-            row[k] = str(v).decode('utf-8')
-    key_len = {}
-    for k in keys:
-        #vl = [len(str(row[k])) for row in content]
-        vl = [len(row[k]) for row in content]
-        vl.append(len(str(k)))
-        key_len[k] = max(vl)
-    format_str = '|'
-    for k in keys:
-        format_str += ' %%(%s)-%ss |'%(k,key_len[k])
-    ##print header
-    hr = '-'*(sum(key_len.values())+3*len(key_len)+1)
-    print hr
-    print format_str%dict(zip(keys,keys))
-    print hr
-    for row in content:
+class Option():
+    def __init__(self):
+        self.limit = 100
+        self.mode = 'sql'
+        self.mlist = ('sql','py','kdb')
+        self.khost = 'boromir'
+
+    def set_mode(self, arg):
+        if arg in self.mlist:
+            self.mode = arg
+        else:
+            print 'mode argument must in', self.mlist
+
+    def set_limit(self, arg):
+        self.limit = arg
+
+    def set_khost(self, arg):
+        self.khost = arg
+
+class Processor():
+    def __init__(self, opt):
+        self.tc = 0.0
+
+    def process(self, cmd):
+        pass
+
+class SQLProcessor(Processor):
+    def __init__(self, opt):
+        self.tc = 0.0
+        self.opt = opt
+
+    def process(self, store, cmd):
+        print cmd
+        store.farm.execute(cmd)
+        desc = store.farm.description
+        keys = [item[0] for item in desc]
+        content = store.farm.fetchall()
+        if not content:
+            print 'null result'
+            return
+        if len(content) > self.opt.limit: content = content[:self.opt.limit]
+        for row in content:
+            for k, v in row.items():
+                #v = regx.sub(r'\1\0', str(v).decode('utf-8'))
+                row[k] = str(v).decode('utf-8')
+        key_len = {}
+        for k in keys:
+            #vl = [len(str(row[k])) for row in content]
+            vl = [len(row[k]) for row in content]
+            vl.append(len(str(k)))
+            key_len[k] = max(vl)
         format_str = '|'
         for k in keys:
-            ##the number of chinese words
-            num_cw = len(regx.findall(row[k]))
-            format_str += ' %%(%s)-%ss |'%(k,key_len[k]-num_cw)
-        outstr = format_str%row
-        print outstr
-    print hr
+            format_str += ' %%(%s)-%ss |'%(k,key_len[k])
+        ##print header
+        hr = '-'*(sum(key_len.values())+3*len(key_len)+1)
+        print hr
+        print format_str%dict(zip(keys,keys))
+        print hr
+        for row in content:
+            format_str = '|'
+            for k in keys:
+                ##the number of chinese words
+                num_cw = len(regx.findall(row[k]))
+                format_str += ' %%(%s)-%ss |'%(k,key_len[k]-num_cw)
+            outstr = format_str%row
+            print outstr
+        print hr
 
-def process_kdb(cmd):
-    cmd = '%s#%s'%(MAX_LIMIT, cmd)
-    data = q_query(cmd, host=kdb_host)
-    for row in data:
-        print ' '.join(row)
+class KDBProcessor(Processor):
+    def __init__(self, opt):
+        self.tc = 0.0
+        self.opt = opt
 
-def get_store(conf):
-    return SqlStore(host=conf['host'],user=conf['user'],passwd=conf['passwd'],\
-            db=conf['db'],port=conf['port'],cursorclass=MySQLdb.cursors.DictCursor)
+    def process(self, cmd):
+        cmd = '%s#%s'%(self.opt.limit, cmd)
+        data = q_query(cmd, host=self.opt.khost)
+        for row in data:
+            print ' '.join(row)
+
+class Store():
+    def __init__(self):
+        self.store = self.get_store(luz2)
+        self.farm = self.store.farm
+
+    def get_store(self, conf):
+        return SqlStore(host=conf['host'],user=conf['user'],passwd=conf['passwd'],\
+                db=conf['db'],port=conf['port'],cursorclass=MySQLdb.cursors.DictCursor)
+
+    def switch(self, conf):
+        self.store = self.get_store(conf)
+        self.farm = self.store.farm
+
+    def close(self):
+        self.store.close()
 
 def cmd_loop():
     print '''Welcome to wsql, \npress "q" to exit, \npress "use **" to switch database, \npress sql command to query mysql.\n'''
-    global MAX_LIMIT, mode, kdb_host
-    store = get_store(luz2)
+    opt = Option()
+    store = Store()
+    sqlp = SQLProcessor(opt)
+    kdbp = KDBProcessor(opt)
     while 1:
-        prompt = '%s>'%mode
+        prompt = '%s>'%opt.mode
         #cmd = raw_input(prompt).strip()
         cmd = raw_input(prompt)
         if not cmd: continue
@@ -95,25 +139,21 @@ def cmd_loop():
             else:
                 dbconf = eval(db+'conf')
             print 'DB config:', dbconf
-            store = get_store(dbconf)
+            store.switch(dbconf)
         elif cmd[:6].lower() == 'limit ':
-            MAX_LIMIT = cmd.split()[-1]
+            opt.set_limit(int(cmd.split()[-1]))
         elif cmd[:5].lower() == 'host ':
-            kdb_host = cmd.split()[-1]
+            opt.set_khost(cmd.split()[-1])
         elif cmd[:5].lower() == 'mode ':
-            arg = cmd.split()[-1]
-            if arg in mode_list:
-                mode = arg
-            else:
-                print 'mode must in', mode_list
+            opt.set_mode(cmd.split()[-1])
         else:
             try:
-                if mode == 'py':
+                if opt.mode == 'py':
                     exec cmd
-                elif mode == 'sql':
-                    process_sql(store, cmd)
-                elif mode == 'kdb':
-                    process_kdb(cmd)
+                elif opt.mode == 'sql':
+                    sqlp.process(store, cmd)
+                elif opt.mode == 'kdb':
+                    kdbp.process(cmd)
             except:
                 e = strException()
                 print e
