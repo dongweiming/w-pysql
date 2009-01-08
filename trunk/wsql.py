@@ -123,56 +123,69 @@ class Store():
     def close(self):
         self.store.close()
 
-def cmd_loop():
-    print '''Welcome to wsql, \npress "q" to exit, \npress "use **" to switch database, \npress sql command to query mysql.\n'''
-    opt = Option()
-    store = Store()
-    sqlp = SQLProcessor(opt)
-    kdbp = KDBProcessor(opt)
-    while 1:
-        prompt = '%s>'%opt.mode
-        #cmd = raw_input(prompt).strip()
-        cmd = raw_input(prompt)
-        if not cmd: continue
-        if cmd == 'q':
-            print 'exit'
-            break
-        elif cmd[:4].lower() == 'use ':
-            db = cmd.split()[-1]
-            store.close()
-            if db[-1].isdigit():
-                dbconf = eval(db)
-            else:
-                dbconf = eval(db+'conf')
-            print 'DB config:', dbconf
-            store.switch(dbconf)
-        elif cmd[:6].lower() == 'limit ':
-            opt.set_limit(int(cmd.split()[-1]))
-        elif cmd[:5].lower() == 'host ':
-            opt.set_khost(cmd.split()[-1])
-        elif cmd[:5].lower() == 'mode ':
-            opt.set_mode(cmd.split()[-1])
-        else:
-            try:
-                if opt.mode == 'py':
-                    reobj = reqt.search(cmd)
-                    if not reobj:
-                        ##expression
-                        print eval(cmd)
-                    else:
-                        ##statement
-                        exec cmd
-                elif opt.mode == 'sql':
-                    sqlp.process(store, cmd)
-                    print 'time cost: %10.4f sec'%sqlp.tc
-                elif opt.mode == 'kdb':
-                    kdbp.process(cmd)
-                    print 'time cost: %10.4f sec'%kdbp.tc
-            except:
-                e = strException()
-                print e
+class CMD_loop():
+    def __init__(self):
+        self.opt = Option()
+        self.store = Store()
+        self.sqlp = SQLProcessor(self.opt)
+        self.kdbp = KDBProcessor(self.opt)
+        self.cmd = ''
+        self.show_help()
 
-    store.close()
+    def show_help(self):
+        print '''Welcome to wsql, \npress "q" to exit, \npress "use **" to switch database, \npress sql command to query mysql.\n'''
+
+    def run(self):
+        while 1:
+            self.prompt = '%s>'%self.opt.mode
+            self.cmd = raw_input(self.prompt).strip()
+            if not self.cmd: continue
+            if self.cmd == 'q':
+                print 'exit'
+                break
+            elif self.cmd[:4].lower() == 'use ':
+                db = self.cmd.split()[-1]
+                self.store.close()
+                if db[-1].isdigit():
+                    dbconf = eval(db)
+                else:
+                    dbconf = eval(db+'conf')
+                print 'DB config:', dbconf
+                self.store.switch(dbconf)
+            elif self.cmd[:6].lower() == 'limit ':
+                self.opt.set_limit(int(self.cmd.split()[-1]))
+            elif self.cmd[:5].lower() == 'host ':
+                self.opt.set_khost(self.cmd.split()[-1])
+            elif self.cmd[:5].lower() == 'mode ':
+                self.opt.set_mode(self.cmd.split()[-1])
+            else:
+                try:
+                    if self.opt.mode == 'py':
+                        reobj = reqt.search(self.cmd)
+                        if not reobj:
+                            ##expression
+                            print eval(self.cmd)
+                        else:
+                            ##statement
+                            exec self.cmd
+                    elif self.opt.mode == 'sql':
+                        try:
+                            ##passed from py mode
+                            self.cmd = eval(self.cmd)
+                        except SyntaxError:
+                            pass
+                        self.sqlp.process(self.store, self.cmd)
+                        print 'time cost: %8.4f sec\n'%self.sqlp.tc
+                    elif self.opt.mode == 'kdb':
+                        self.kdbp.process(cmd)
+                        print 'time cost: %8.4f sec\n'%self.kdbp.tc
+                except:
+                    self.e = strException()
+                    print self.e
+
+        self.store.close()
+
 
 if __name__ == '__main__':
-    cmd_loop()
+    loop = CMD_loop()
+    loop.run()
