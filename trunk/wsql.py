@@ -14,6 +14,7 @@ from sqlstore import *
 from tools import q_query
 
 regx = re.compile(u"([\u2e80-\uffff])", re.UNICODE)
+reqt = re.compile('[\w\d\s](=)[\w\d\s]')
 
 def strException():
     sio = cStringIO.StringIO()
@@ -154,13 +155,19 @@ def cmd_loop():
         else:
             try:
                 if opt.mode == 'py':
-                    exec cmd
+                    reobj = reqt.search(cmd)
+                    if not reobj:
+                        ##expression
+                        print eval(cmd)
+                    else:
+                        ##statement
+                        exec cmd
                 elif opt.mode == 'sql':
                     sqlp.process(store, cmd)
-                    print 'time cost: %10.4f'%sqlp.tc
+                    print 'time cost: %10.4f sec'%sqlp.tc
                 elif opt.mode == 'kdb':
                     kdbp.process(cmd)
-                    print 'time cost: %10.4f'%kdbp.tc
+                    print 'time cost: %10.4f sec'%kdbp.tc
             except:
                 e = strException()
                 print e
