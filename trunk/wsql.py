@@ -65,7 +65,8 @@ class SQLProcessor(Processor):
         if not content:
             print 'null result'
             return
-        if len(content) > self.opt.limit: content = content[:self.opt.limit]
+        self.rnum = len(content)
+        if self.rnum > self.opt.limit: content = content[:self.opt.limit]
         for row in content:
             for k, v in row.items():
                 #v = regx.sub(r'\1\0', str(v).decode('utf-8'))
@@ -93,6 +94,7 @@ class SQLProcessor(Processor):
             outstr = format_str%row
             print outstr
         print hr
+        print '%d rows'%self.rnum
 
 class KDBProcessor(Processor):
     def __init__(self, opt):
@@ -177,8 +179,17 @@ class CMD_loop():
                         self.sqlp.process(self.store, self.cmd)
                         print 'time cost: %8.4f sec\n'%self.sqlp.tc
                     elif self.opt.mode == 'kdb':
+                        try:
+                            ##passed from py mode
+                            self.cmd = eval(self.cmd)
+                        except SyntaxError:
+                            pass
                         self.kdbp.process(cmd)
                         print 'time cost: %8.4f sec\n'%self.kdbp.tc
+                except KeyboardInterrupt:
+                    print 'keyboard interrupt'
+                    print 'exit'
+                    break
                 except:
                     self.e = strException()
                     print self.e
