@@ -146,14 +146,17 @@ class CMD_loop():
                 print 'exit'
                 break
             elif self.cmd[:4].lower() == 'use ':
-                db = self.cmd.split()[-1]
-                self.store.close()
-                if db[-1].isdigit():
-                    dbconf = eval(db)
-                else:
-                    dbconf = eval(db+'conf')
-                print 'DB config:', dbconf
-                self.store.switch(dbconf)
+                try:
+                    db = self.cmd.split()[-1]
+                    self.store.close()
+                    if db[-1].isdigit():
+                        dbconf = eval(db)
+                    else:
+                        dbconf = eval(db+'conf')
+                    print 'DB config:', dbconf
+                    self.store.switch(dbconf)
+                except:
+                    print 'Wrong config:',db
             elif self.cmd[:6].lower() == 'limit ':
                 self.opt.set_limit(int(self.cmd.split()[-1]))
             elif self.cmd[:5].lower() == 'host ':
